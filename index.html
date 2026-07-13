@@ -24,21 +24,23 @@ main{max-width:1100px;margin:auto;padding:14px 12px 90px}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
 button,.btn{border:0;border-radius:12px;padding:10px 13px;font-weight:800;cursor:pointer}
 .primary{background:var(--p);color:#fff}.secondary{background:#efe4eb;color:var(--p)}.danger{background:#fde7e5;color:var(--bad)}
+.big-action{width:100%;padding:15px;font-size:16px}
 input,select,textarea{width:100%;padding:11px;border:1px solid #d8ccd4;border-radius:10px;background:#fff;font-size:15px}
 label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
 .formgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px}
-.client,.payment{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr auto;gap:10px;align-items:center;padding:12px;border-bottom:1px solid var(--line)}
-.client:last-child,.payment:last-child{border-bottom:0}
+.client,.payment,.queue-item{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr auto;gap:10px;align-items:center;padding:12px;border-bottom:1px solid var(--line)}
+.client:last-child,.payment:last-child,.queue-item:last-child{border-bottom:0}
 .name{font-weight:800}.meta{font-size:12px;color:var(--muted);margin-top:3px}.money{font-weight:800}
 .badge{font-size:11px;font-weight:800;border-radius:999px;padding:6px 9px;display:inline-block}
 .ok{background:#e4f4ec;color:var(--ok)}.warn{background:#fff2d8;color:var(--warn)}.bad{background:#fde8e7;color:var(--bad)}.neutral{background:#eee8ec;color:#645861}
 dialog{border:0;border-radius:18px;max-width:760px;width:calc(100% - 24px);padding:0;box-shadow:0 20px 80px #0005}
 dialog::backdrop{background:#0006}.modal-head{background:var(--p);color:#fff;padding:16px}.modal-body{padding:16px}.modal-foot{display:flex;justify-content:flex-end;gap:8px;padding:0 16px 16px}
-.empty{text-align:center;color:var(--muted);padding:28px}
-.small{padding:8px 10px;font-size:12px}
+.empty{text-align:center;color:var(--muted);padding:28px}.small{padding:8px 10px;font-size:12px}
+.progress{height:10px;background:#eee5eb;border-radius:999px;overflow:hidden;margin:10px 0}.progress>div{height:100%;background:var(--p);width:0}
+.notice{background:#fff7e6;border:1px solid #f1d59d;border-radius:14px;padding:12px;margin:10px 0;color:#72510d}
 footer{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:8px 12px;text-align:center;font-size:11px;color:var(--muted)}
-@media(max-width:780px){.grid4{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr}.filters{grid-template-columns:1fr}.client,.payment{grid-template-columns:1fr 1fr}.client .row-actions,.payment .row-actions{grid-column:1/-1}}
+@media(max-width:780px){.grid4{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr}.filters{grid-template-columns:1fr}.client,.payment,.queue-item{grid-template-columns:1fr 1fr}.client .row-actions,.payment .row-actions,.queue-item .row-actions{grid-column:1/-1}}
 </style>
 </head>
 <body>
@@ -64,7 +66,17 @@ footer{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px sol
 <div class="card metric"><span>Cobrado este mes</span><b id="mPaidMonth">$0</b></div>
 <div class="card metric"><span>Total pagos</span><b id="mPayments">0</b></div>
 </div>
-<div class="actions"><button class="primary" onclick="openClient()">+ Agregar cliente</button><button class="secondary" onclick="showTab('clientes',document.querySelectorAll('.tab')[1])">Ver clientes</button><button class="primary" onclick="openReminderCenter()">Enviar recordatorios de hoy</button></div>
+
+<div class="card" style="margin-top:10px">
+<h3 style="margin-top:0">Recordatorios de hoy</h3>
+<div id="reminderSummary" class="meta"></div>
+<div class="actions">
+<button class="primary big-action" onclick="openReminderQueue()">Enviar recordatorios pendientes</button>
+</div>
+<div class="notice">WhatsApp abrirá cada chat con el mensaje listo. Por seguridad, tú confirmas cada envío.</div>
+</div>
+
+<div class="actions"><button class="primary" onclick="openClient()">+ Agregar cliente</button><button class="secondary" onclick="showTab('clientes',document.querySelectorAll('.tab')[1])">Ver clientes</button></div>
 <div class="card"><h3>Pagos que requieren atención</h3><div id="attention"></div></div>
 </section>
 
@@ -80,9 +92,7 @@ footer{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px sol
 <div class="card" id="clientList" style="margin-top:10px"></div>
 </section>
 
-<section id="pagos" class="section">
-<div class="card"><h3>Historial de pagos</h3><div id="paymentList"></div></div>
-</section>
+<section id="pagos" class="section"><div class="card"><h3>Historial de pagos</h3><div id="paymentList"></div></div></section>
 
 <section id="respaldo" class="section">
 <div class="card"><h3>Copias de seguridad</h3><p class="meta">Los datos se guardan en este navegador. Exporta una copia regularmente.</p>
@@ -92,9 +102,7 @@ footer{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px sol
 
 <dialog id="clientDialog">
 <div class="modal-head"><b id="modalTitle">Agregar cliente</b></div>
-<div class="modal-body">
-<input type="hidden" id="editId">
-<div class="formgrid">
+<div class="modal-body"><input type="hidden" id="editId"><div class="formgrid">
 <div><label>Nombre</label><input id="name"></div>
 <div><label>WhatsApp con código de país</label><input id="phone" inputmode="numeric" placeholder="14805551234"></div>
 <div><label>Tipo de cuenta</label><select id="accountType"><option>Amazon Flex</option><option>Spark</option><option>Instacart</option><option>Roadie</option><option>Uber</option><option>Otra</option></select></div>
@@ -115,15 +123,14 @@ footer{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px sol
 <div class="modal-foot"><button class="secondary" onclick="messageDialog.close()">Cancelar</button><button class="primary" onclick="openWhatsApp()">Abrir WhatsApp</button></div>
 </dialog>
 
-
-<dialog id="reminderDialog">
-<div class="modal-head"><b>Centro de recordatorios</b></div>
+<dialog id="queueDialog">
+<div class="modal-head"><b>Enviar recordatorios pendientes</b></div>
 <div class="modal-body">
-<div class="card metric" style="margin-bottom:10px"><span>Clientes por recordar</span><b id="reminderCount">0</b><div class="meta" id="reminderTotal">$0</div></div>
-<p class="meta">Abre cada chat con el mensaje listo. WhatsApp requiere que tú pulses “Enviar”.</p>
-<div id="reminderList"></div>
+<div id="queueStatus" class="meta"></div>
+<div class="progress"><div id="queueProgress"></div></div>
+<div id="queueList"></div>
 </div>
-<div class="modal-foot"><button class="secondary" onclick="reminderDialog.close()">Cerrar</button><button class="primary" id="nextReminderBtn" onclick="openNextReminder()">Abrir siguiente</button></div>
+<div class="modal-foot"><button class="secondary" onclick="queueDialog.close()">Cerrar</button></div>
 </dialog>
 
 <footer>MA Solutions CRM · Guarda copias de seguridad regularmente</footer>
@@ -132,7 +139,7 @@ footer{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px sol
 const K1='ma_crm_clients_v3',K2='ma_crm_payments_v3';
 let clients=JSON.parse(localStorage.getItem(K1)||'[]');
 let payments=JSON.parse(localStorage.getItem(K2)||'[]');
-let activeClient=null,deferredPrompt=null,reminderQueue=[],reminderIndex=0;
+let activeClient=null,deferredPrompt=null,queueIds=[];
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e});
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 
@@ -145,6 +152,8 @@ function badge(c){return{paid:['PAGADO','ok'],paused:['PAUSADO','neutral'],late:
 function save(){localStorage.setItem(K1,JSON.stringify(clients));localStorage.setItem(K2,JSON.stringify(payments));renderAll()}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function showTab(id,btn){document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active');renderAll()}
+function reminderClients(){return clients.filter(c=>c.phone&&['late','today'].includes(dueType(c)))}
+function reminderMessage(c){return dueType(c)==='late'?`Hola ${c.name}, tienes pendiente el pago de ${money(c.amount)} por la renta de tu cuenta ${c.accountType}. Por favor confírmame cuándo realizarás el pago. Gracias.`:`Hola ${c.name} 👋 Te recuerdo que hoy corresponde el pago de ${money(c.amount)} por la renta de tu cuenta ${c.accountType}. Cuando realices el pago, por favor envíame el comprobante. ¡Gracias!`}
 
 function renderDashboard(){
 mClients.textContent=clients.filter(c=>c.status!=='Pausado').length;
@@ -156,6 +165,8 @@ mPaidToday.textContent=money(payments.filter(p=>p.date===t).reduce((s,p)=>s+p.am
 mPaidWeek.textContent=money(payments.filter(p=>p.date>=wa&&p.date<=t).reduce((s,p)=>s+p.amount,0));
 mPaidMonth.textContent=money(payments.filter(p=>p.date.slice(0,7)===month).reduce((s,p)=>s+p.amount,0));
 mPayments.textContent=payments.length;
+const rs=reminderClients(),total=rs.reduce((s,c)=>s+Number(c.amount||0),0);
+reminderSummary.textContent=rs.length?`${rs.length} cliente(s) requieren recordatorio · Total esperado: ${money(total)}`:'No hay recordatorios pendientes hoy.';
 const att=clients.filter(c=>['late','today','tomorrow'].includes(dueType(c))).sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
 attention.innerHTML=att.length?att.map(c=>clientRow(c,true)).join(''):'<div class="empty">No hay pagos urgentes.</div>';
 }
@@ -164,46 +175,77 @@ function renderClients(){const q=(search?.value||'').toLowerCase(),sf=statusFilt
 function renderPayments(){paymentList.innerHTML=payments.length?payments.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(p=>`<div class="payment"><div><div class="name">${esc(p.clientName)}</div><div class="meta">${esc(p.accountType)} · ${esc(p.city)}</div></div><div>${esc(p.date)}</div><div class="money">${money(p.amount)}</div><div><span class="badge ok">PAGADO</span></div><div class="row-actions"><button class="danger small" onclick="deletePayment('${p.id}')">Eliminar</button></div></div>`).join(''):'<div class="empty">Todavía no hay pagos registrados.</div>'}
 function renderAll(){renderDashboard();renderClients();renderPayments()}
 
-function openClient(id=''){const c=clients.find(x=>x.id===id)||{};modalTitle.textContent=id?'Editar cliente':'Agregar cliente';editId.value=c.id||'';name.value=c.name||'';phone.value=c.phone||'';accountType.value=c.accountType||'Amazon Flex';state.value=c.state||'';city.value=c.city||'';frequency.value=c.frequency||'Semanal';dueDate.value=c.dueDate||iso();amount.value=c.amount||'';status.value=c.status||'Pendiente';notes.value=c.notes||'';clientDialog.showModal()}
-function saveClient(){if(!name.value.trim()){alert('Escribe el nombre.');return}const o={id:editId.value||String(Date.now()),name:name.value.trim(),phone:phone.value.replace(/\D/g,''),accountType:accountType.value,state:state.value.trim(),city:city.value.trim(),frequency:frequency.value,dueDate:dueDate.value,amount:Number(amount.value||0),status:status.value,notes:notes.value.trim()};let i=clients.findIndex(c=>c.id===o.id);if(i>=0)clients[i]=o;else clients.push(o);clientDialog.close();save()}
+function openReminderQueue(){
+  const rs=reminderClients();
+  if(!rs.length){alert('No hay recordatorios pendientes para hoy.');return}
+  queueIds=rs.map(c=>c.id);
+  renderQueue();
+  queueDialog.showModal();
+}
+function renderQueue(){
+  const total=queueIds.length;
+  const sent=queueIds.filter(id=>localStorage.getItem('reminder_sent_'+iso()+'_'+id)==='1').length;
+  queueStatus.textContent=`Enviados hoy: ${sent} de ${total}`;
+  queueProgress.style.width=(total?sent/total*100:0)+'%';
+  queueList.innerHTML=queueIds.map(id=>{
+    const c=clients.find(x=>x.id===id),done=localStorage.getItem('reminder_sent_'+iso()+'_'+id)==='1';
+    if(!c)return'';
+    return `<div class="queue-item"><div><div class="name">${esc(c.name)}</div><div class="meta">${esc(c.accountType)} · ${esc(c.city)}</div></div><div class="money">${money(c.amount)}</div><div><span class="badge ${done?'ok':(dueType(c)==='late'?'bad':'warn')}">${done?'ENVIADO':(dueType(c)==='late'?'ATRASADO':'VENCE HOY')}</span></div><div class="meta">${esc(c.phone)}</div><div class="row-actions"><button class="${done?'secondary':'primary'} small" onclick="sendQueueReminder('${c.id}')">${done?'Enviar otra vez':'Abrir WhatsApp'}</button></div></div>`;
+  }).join('');
+}
+function sendQueueReminder(id){
+  const c=clients.find(x=>x.id===id);
+  if(!c||!c.phone)return;
+  localStorage.setItem('reminder_sent_'+iso()+'_'+id,'1');
+  renderQueue();
+  window.open('https://wa.me/'+c.phone+'?text='+encodeURIComponent(reminderMessage(c)),'_blank');
+}
+
+function openClient(id=''){
+  const c=clients.find(x=>x.id===id)||{};
+  document.getElementById('modalTitle').textContent=id?'Editar cliente':'Agregar cliente';
+  document.getElementById('editId').value=c.id||'';
+  document.getElementById('name').value=c.name||'';
+  document.getElementById('phone').value=c.phone||'';
+  document.getElementById('accountType').value=c.accountType||'Amazon Flex';
+  document.getElementById('state').value=c.state||'';
+  document.getElementById('city').value=c.city||'';
+  document.getElementById('frequency').value=c.frequency||'Semanal';
+  document.getElementById('dueDate').value=c.dueDate||iso();
+  document.getElementById('amount').value=c.amount||'';
+  document.getElementById('status').value=c.status||'Pendiente';
+  document.getElementById('notes').value=c.notes||'';
+  document.getElementById('clientDialog').showModal();
+}
+function saveClient(){
+  const el=id=>document.getElementById(id);
+  const clientName=el('name').value.trim();
+  if(!clientName){alert('Escribe el nombre.');return}
+  const o={
+    id:el('editId').value||String(Date.now()),
+    name:clientName,
+    phone:el('phone').value.replace(/\D/g,''),
+    accountType:el('accountType').value,
+    state:el('state').value.trim(),
+    city:el('city').value.trim(),
+    frequency:el('frequency').value,
+    dueDate:el('dueDate').value,
+    amount:Number(el('amount').value||0),
+    status:el('status').value,
+    notes:el('notes').value.trim()
+  };
+  const i=clients.findIndex(c=>c.id===o.id);
+  if(i>=0) clients[i]=o; else clients.push(o);
+  document.getElementById('clientDialog').close();
+  save();
+  alert('Cliente guardado correctamente.');
+}
 function nextDate(c){let d=new Date((c.dueDate||iso())+'T12:00:00');if(c.frequency==='Semanal')d.setDate(d.getDate()+7);else if(c.frequency==='Quincenal')d.setDate(d.getDate()+14);else d.setMonth(d.getMonth()+1);return iso(d)}
 function registerPayment(id){const c=clients.find(x=>x.id===id);if(!c)return;payments.push({id:String(Date.now()),clientId:c.id,clientName:c.name,accountType:c.accountType,city:c.city,date:iso(),amount:Number(c.amount||0)});c.dueDate=nextDate(c);c.status='Pendiente';save();alert('Pago registrado y próxima fecha actualizada.')}
 function deletePayment(id){if(confirm('¿Eliminar este pago del historial?')){payments=payments.filter(p=>p.id!==id);save()}}
 function removeClient(id){if(confirm('¿Eliminar este cliente?')){clients=clients.filter(c=>c.id!==id);save()}}
-function prepareMessage(id){const c=clients.find(x=>x.id===id);activeClient=c;messageText.value=reminderMessage(c);messageDialog.showModal()}
-function openWhatsApp(){if(!activeClient?.phone){alert('Falta el número de WhatsApp.');return}window.open('https://wa.me/'+activeClient.phone+'?text='+encodeURIComponent(messageText.value),'_blank');messageDialog.close()}
-
-function reminderMessage(c){
-  return dueType(c)==='late'
-    ? `Hola ${c.name}, tienes pendiente el pago de ${money(c.amount)} por la renta de tu cuenta ${c.accountType}. Por favor confírmame cuándo realizarás el pago y envíame el comprobante. Gracias.`
-    : `Hola ${c.name} 👋 Te recuerdo que hoy corresponde el pago de ${money(c.amount)} por la renta de tu cuenta ${c.accountType}. Cuando realices el pago, por favor envíame el comprobante. ¡Gracias!`;
-}
-function openReminderCenter(){
-  reminderQueue=clients
-    .filter(c=>c.status==='Pendiente' && ['late','today'].includes(dueType(c)))
-    .sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||''));
-  reminderIndex=0;
-  reminderCount.textContent=reminderQueue.length;
-  reminderTotal.textContent='Total esperado: '+money(reminderQueue.reduce((s,c)=>s+Number(c.amount||0),0));
-  reminderList.innerHTML=reminderQueue.length
-    ? reminderQueue.map((c,i)=>`<div class="client"><div><div class="name">${esc(c.name)}</div><div class="meta">${esc(c.accountType)} · ${esc(c.city)}, ${esc(c.state)}</div></div><div class="money">${money(c.amount)}</div><div><span class="badge ${dueType(c)==='late'?'bad':'warn'}">${dueType(c)==='late'?'ATRASADO':'VENCE HOY'}</span></div><div class="meta">${esc(c.phone||'Sin teléfono')}</div><div class="row-actions"><button class="primary small" onclick="openReminderByIndex(${i})">Abrir WhatsApp</button></div></div>`).join('')
-    : '<div class="empty">No hay pagos vencidos ni pagos para hoy.</div>';
-  nextReminderBtn.disabled=!reminderQueue.length;
-  reminderDialog.showModal();
-}
-function openReminderByIndex(i){
-  const c=reminderQueue[i];
-  if(!c)return;
-  if(!c.phone){alert('Este cliente no tiene número de WhatsApp.');return}
-  window.open('https://wa.me/'+c.phone+'?text='+encodeURIComponent(reminderMessage(c)),'_blank');
-  reminderIndex=Math.max(reminderIndex,i+1);
-}
-function openNextReminder(){
-  while(reminderIndex<reminderQueue.length && !reminderQueue[reminderIndex].phone) reminderIndex++;
-  if(reminderIndex>=reminderQueue.length){alert('Ya abriste todos los recordatorios de esta lista.');return}
-  openReminderByIndex(reminderIndex);
-}
-
+function prepareMessage(id){const c=clients.find(x=>x.id===id);activeClient=c;document.getElementById('messageText').value=reminderMessage(c);document.getElementById('messageDialog').showModal()}
+function openWhatsApp(){if(!activeClient?.phone){alert('Falta el número de WhatsApp.');return}window.open('https://wa.me/'+activeClient.phone+'?text='+encodeURIComponent(document.getElementById('messageText').value),'_blank');document.getElementById('messageDialog').close()}
 function exportData(){let blob=new Blob([JSON.stringify({clients,payments},null,2)],{type:'application/json'});let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='respaldo_ma_solutions_'+iso()+'.json';a.click();URL.revokeObjectURL(a.href)}
 function importData(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!Array.isArray(d.clients)||!Array.isArray(d.payments))throw 0;if(confirm('Esto reemplazará los datos actuales. ¿Continuar?')){clients=d.clients;payments=d.payments;save()}}catch{alert('Archivo inválido.')}};r.readAsText(f);e.target.value=''}
 function clearAll(){if(confirm('¿Borrar todos los clientes y pagos? Esta acción no se puede deshacer.')){clients=[];payments=[];save()}}

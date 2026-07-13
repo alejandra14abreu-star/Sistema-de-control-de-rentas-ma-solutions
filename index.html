@@ -64,7 +64,7 @@ footer{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px sol
 <div class="card metric"><span>Cobrado este mes</span><b id="mPaidMonth">$0</b></div>
 <div class="card metric"><span>Total pagos</span><b id="mPayments">0</b></div>
 </div>
-<div class="actions"><button class="primary" onclick="openClient()">+ Agregar cliente</button><button class="secondary" onclick="showTab('clientes',document.querySelectorAll('.tab')[1])">Ver clientes</button></div>
+<div class="actions"><button class="primary" onclick="openClient()">+ Agregar cliente</button><button class="secondary" onclick="showTab('clientes',document.querySelectorAll('.tab')[1])">Ver clientes</button><button class="primary" onclick="openReminderCenter()">Enviar recordatorios de hoy</button></div>
 <div class="card"><h3>Pagos que requieren atención</h3><div id="attention"></div></div>
 </section>
 
@@ -115,13 +115,24 @@ footer{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px sol
 <div class="modal-foot"><button class="secondary" onclick="messageDialog.close()">Cancelar</button><button class="primary" onclick="openWhatsApp()">Abrir WhatsApp</button></div>
 </dialog>
 
+
+<dialog id="reminderDialog">
+<div class="modal-head"><b>Centro de recordatorios</b></div>
+<div class="modal-body">
+<div class="card metric" style="margin-bottom:10px"><span>Clientes por recordar</span><b id="reminderCount">0</b><div class="meta" id="reminderTotal">$0</div></div>
+<p class="meta">Abre cada chat con el mensaje listo. WhatsApp requiere que tú pulses “Enviar”.</p>
+<div id="reminderList"></div>
+</div>
+<div class="modal-foot"><button class="secondary" onclick="reminderDialog.close()">Cerrar</button><button class="primary" id="nextReminderBtn" onclick="openNextReminder()">Abrir siguiente</button></div>
+</dialog>
+
 <footer>MA Solutions CRM · Guarda copias de seguridad regularmente</footer>
 
 <script>
 const K1='ma_crm_clients_v3',K2='ma_crm_payments_v3';
 let clients=JSON.parse(localStorage.getItem(K1)||'[]');
 let payments=JSON.parse(localStorage.getItem(K2)||'[]');
-let activeClient=null,deferredPrompt=null;
+let activeClient=null,deferredPrompt=null,reminderQueue=[],reminderIndex=0;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e});
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 
@@ -159,8 +170,40 @@ function nextDate(c){let d=new Date((c.dueDate||iso())+'T12:00:00');if(c.frequen
 function registerPayment(id){const c=clients.find(x=>x.id===id);if(!c)return;payments.push({id:String(Date.now()),clientId:c.id,clientName:c.name,accountType:c.accountType,city:c.city,date:iso(),amount:Number(c.amount||0)});c.dueDate=nextDate(c);c.status='Pendiente';save();alert('Pago registrado y próxima fecha actualizada.')}
 function deletePayment(id){if(confirm('¿Eliminar este pago del historial?')){payments=payments.filter(p=>p.id!==id);save()}}
 function removeClient(id){if(confirm('¿Eliminar este cliente?')){clients=clients.filter(c=>c.id!==id);save()}}
-function prepareMessage(id){const c=clients.find(x=>x.id===id);activeClient=c;messageText.value=dueType(c)==='late'?`Hola ${c.name}, tienes pendiente el pago de ${money(c.amount)} por la renta de tu cuenta ${c.accountType}. Por favor confírmame cuándo realizarás el pago. Gracias.`:`Hola ${c.name} 👋 Te recuerdo que hoy corresponde el pago de ${money(c.amount)} por la renta de tu cuenta ${c.accountType}. Cuando realices el pago, por favor envíame el comprobante. ¡Gracias!`;messageDialog.showModal()}
+function prepareMessage(id){const c=clients.find(x=>x.id===id);activeClient=c;messageText.value=reminderMessage(c);messageDialog.showModal()}
 function openWhatsApp(){if(!activeClient?.phone){alert('Falta el número de WhatsApp.');return}window.open('https://wa.me/'+activeClient.phone+'?text='+encodeURIComponent(messageText.value),'_blank');messageDialog.close()}
+
+function reminderMessage(c){
+  return dueType(c)==='late'
+    ? `Hola ${c.name}, tienes pendiente el pago de ${money(c.amount)} por la renta de tu cuenta ${c.accountType}. Por favor confírmame cuándo realizarás el pago y envíame el comprobante. Gracias.`
+    : `Hola ${c.name} 👋 Te recuerdo que hoy corresponde el pago de ${money(c.amount)} por la renta de tu cuenta ${c.accountType}. Cuando realices el pago, por favor envíame el comprobante. ¡Gracias!`;
+}
+function openReminderCenter(){
+  reminderQueue=clients
+    .filter(c=>c.status==='Pendiente' && ['late','today'].includes(dueType(c)))
+    .sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||''));
+  reminderIndex=0;
+  reminderCount.textContent=reminderQueue.length;
+  reminderTotal.textContent='Total esperado: '+money(reminderQueue.reduce((s,c)=>s+Number(c.amount||0),0));
+  reminderList.innerHTML=reminderQueue.length
+    ? reminderQueue.map((c,i)=>`<div class="client"><div><div class="name">${esc(c.name)}</div><div class="meta">${esc(c.accountType)} · ${esc(c.city)}, ${esc(c.state)}</div></div><div class="money">${money(c.amount)}</div><div><span class="badge ${dueType(c)==='late'?'bad':'warn'}">${dueType(c)==='late'?'ATRASADO':'VENCE HOY'}</span></div><div class="meta">${esc(c.phone||'Sin teléfono')}</div><div class="row-actions"><button class="primary small" onclick="openReminderByIndex(${i})">Abrir WhatsApp</button></div></div>`).join('')
+    : '<div class="empty">No hay pagos vencidos ni pagos para hoy.</div>';
+  nextReminderBtn.disabled=!reminderQueue.length;
+  reminderDialog.showModal();
+}
+function openReminderByIndex(i){
+  const c=reminderQueue[i];
+  if(!c)return;
+  if(!c.phone){alert('Este cliente no tiene número de WhatsApp.');return}
+  window.open('https://wa.me/'+c.phone+'?text='+encodeURIComponent(reminderMessage(c)),'_blank');
+  reminderIndex=Math.max(reminderIndex,i+1);
+}
+function openNextReminder(){
+  while(reminderIndex<reminderQueue.length && !reminderQueue[reminderIndex].phone) reminderIndex++;
+  if(reminderIndex>=reminderQueue.length){alert('Ya abriste todos los recordatorios de esta lista.');return}
+  openReminderByIndex(reminderIndex);
+}
+
 function exportData(){let blob=new Blob([JSON.stringify({clients,payments},null,2)],{type:'application/json'});let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='respaldo_ma_solutions_'+iso()+'.json';a.click();URL.revokeObjectURL(a.href)}
 function importData(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!Array.isArray(d.clients)||!Array.isArray(d.payments))throw 0;if(confirm('Esto reemplazará los datos actuales. ¿Continuar?')){clients=d.clients;payments=d.payments;save()}}catch{alert('Archivo inválido.')}};r.readAsText(f);e.target.value=''}
 function clearAll(){if(confirm('¿Borrar todos los clientes y pagos? Esta acción no se puede deshacer.')){clients=[];payments=[];save()}}

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MA Solutions - Control de Rentas</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;margin:0;background:#f7f4f8;color:#241b22}
+header{background:#8b1e62;color:#fff;padding:18px}
+main{padding:14px;max-width:900px;margin:auto}
+.card{background:#fff;border:1px solid #e6dce3;border-radius:14px;padding:14px;margin-bottom:12px}
+h1{font-size:21px;margin:0} h2{font-size:17px;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+label{font-size:12px;color:#6f626b;display:block;margin-bottom:4px}
+input,select{width:100%;padding:11px;border:1px solid #d8ccd4;border-radius:10px;font-size:16px;box-sizing:border-box}
+button{border:0;border-radius:10px;padding:11px 14px;font-weight:700}
+.primary{background:#8b1e62;color:#fff}.secondary{background:#efe4eb;color:#8b1e62}.danger{background:#fde7e5;color:#a21b12}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.metric{background:#fff;border-radius:12px;padding:12px;border:1px solid #e6dce3}
+.metric b{font-size:22px;display:block}.metric span{font-size:11px;color:#766a72}
+.client{border-top:1px solid #eee3ea;padding:12px 0}
+.client:first-child{border-top:0}
+.name{font-weight:800}.meta{font-size:12px;color:#766a72;margin-top:3px}
+.badge{display:inline-block;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:800;margin-top:6px}
+.late{background:#fde8e7;color:#a21b12}.today{background:#fff2d8;color:#926000}.ok{background:#e4f4ec;color:#177245}.neutral{background:#eee8ec;color:#645861}
+@media(max-width:650px){.metrics{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>MA Solutions — Control de Rentas</h1></header>
+<main>
+<div class="metrics">
+  <div class="metric"><span>Clientes</span><b id="mc">0</b></div>
+  <div class="metric"><span>Vencen hoy</span><b id="mt">0</b></div>
+  <div class="metric"><span>Atrasados</span><b id="ml">0</b></div>
+  <div class="metric"><span>Pendiente</span><b id="mp">$0</b></div>
+</div>
+
+<div class="card">
+<h2>Agregar o editar cliente</h2>
+<input type="hidden" id="editId">
+<div class="grid">
+  <div><label>Nombre</label><input id="name" placeholder="Nombre del cliente"></div>
+  <div><label>WhatsApp con código de país</label><input id="phone" inputmode="numeric" placeholder="14805551234"></div>
+  <div><label>Ciudad o cuenta</label><input id="account" placeholder="Phoenix / Amazon Flex"></div>
+  <div><label>Frecuencia</label><select id="frequency"><option>Semanal</option><option>Quincenal</option><option>Mensual</option></select></div>
+  <div><label>Próximo pago</label><input id="dueDate" type="date"></div>
+  <div><label>Monto</label><input id="amount" type="number" step="0.01" placeholder="150"></div>
+  <div><label>Estado</label><select id="status"><option>Pendiente</option><option>Pagado</option><option>Pausado</option></select></div>
+  <div><label>Notas</label><input id="notes" placeholder="Opcional"></div>
+</div>
+<div class="actions">
+  <button class="primary" onclick="saveClient()">Guardar cliente</button>
+  <button class="secondary" onclick="clearForm()">Limpiar</button>
+</div>
+</div>
+
+<div class="card">
+<h2>Clientes</h2>
+<div id="list"></div>
+</div>
+</main>
+
+<script>
+const KEY='ma_rentas_simple_v2';
+let clients=[];
+try{clients=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){clients=[]}
+function todayISO(){let d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
+function save(){localStorage.setItem(KEY,JSON.stringify(clients));render()}
+function money(n){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n||0))}
+function diff(date){if(!date)return 9999;return Math.round((new Date(date+'T12:00:00')-new Date(todayISO()+'T12:00:00'))/86400000)}
+function state(c){if(c.status==='Pagado')return['PAGADO','ok'];if(c.status==='Pausado')return['PAUSADO','neutral'];let d=diff(c.dueDate);if(d<0)return['ATRASADO','late'];if(d===0)return['VENCE HOY','today'];if(d===1)return['VENCE MAÑANA','neutral'];return['PRÓXIMO','neutral']}
+function saveClient(){
+ const n=document.getElementById('name').value.trim();
+ if(!n){alert('Escribe el nombre.');return}
+ const id=document.getElementById('editId').value || String(Date.now());
+ const obj={id,name:n,phone:phone.value.replace(/\D/g,''),account:account.value.trim(),frequency:frequency.value,dueDate:dueDate.value,amount:Number(amount.value||0),status:status.value,notes:notes.value.trim()};
+ const i=clients.findIndex(x=>x.id===id); if(i>=0)clients[i]=obj;else clients.push(obj);
+ save();clearForm();alert('Cliente guardado.');
+}
+function clearForm(){editId.value='';name.value='';phone.value='';account.value='';frequency.value='Semanal';dueDate.value=todayISO();amount.value='';status.value='Pendiente';notes.value=''}
+function editClient(id){const c=clients.find(x=>x.id===id);if(!c)return;editId.value=c.id;name.value=c.name;phone.value=c.phone;account.value=c.account;frequency.value=c.frequency;dueDate.value=c.dueDate;amount.value=c.amount;status.value=c.status;notes.value=c.notes||'';window.scrollTo({top:0,behavior:'smooth'})}
+function removeClient(id){if(confirm('¿Eliminar este cliente?')){clients=clients.filter(x=>x.id!==id);save()}}
+function whatsapp(id){const c=clients.find(x=>x.id===id);if(!c.phone){alert('Falta el número de WhatsApp.');return}const late=diff(c.dueDate)<0;const msg=late?`Hola ${c.name}, tienes pendiente el pago de ${money(c.amount)} por la renta de tu cuenta. Por favor confírmame cuándo realizarás el pago. Gracias.`:`Hola ${c.name}, te recuerdo que hoy corresponde el pago de ${money(c.amount)} por la renta de tu cuenta. Por favor envíame el comprobante cuando realices el pago. Gracias.`;location.href='https://wa.me/'+c.phone+'?text='+encodeURIComponent(msg)}
+function markPaid(id){const c=clients.find(x=>x.id===id);if(!c)return;c.status='Pagado';save()}
+function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function render(){
+ mc.textContent=clients.length;mt.textContent=clients.filter(c=>c.status==='Pendiente'&&diff(c.dueDate)===0).length;ml.textContent=clients.filter(c=>c.status==='Pendiente'&&diff(c.dueDate)<0).length;mp.textContent=money(clients.filter(c=>c.status==='Pendiente').reduce((s,c)=>s+Number(c.amount||0),0));
+ if(!clients.length){list.innerHTML='<div class="meta">Todavía no has agregado clientes.</div>';return}
+ list.innerHTML=clients.map(c=>{let st=state(c);return `<div class="client"><div class="name">${esc(c.name)}</div><div class="meta">${esc(c.account)} · ${esc(c.phone)} · ${money(c.amount)} · ${esc(c.dueDate)}</div><span class="badge ${st[1]}">${st[0]}</span><div class="actions"><button class="primary" onclick="whatsapp('${c.id}')">WhatsApp</button><button class="secondary" onclick="markPaid('${c.id}')">Pagó</button><button class="secondary" onclick="editClient('${c.id}')">Editar</button><button class="danger" onclick="removeClient('${c.id}')">Eliminar</button></div></div>`}).join('')
+}
+dueDate.value=todayISO();render();
+</script>
+</body>
+</html>
